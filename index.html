@@ -19,7 +19,7 @@
       align-items: center;
       padding: 10px 20px;
       background-color: #2a2a3d;
-      font-size: 18px;
+      font-size: 16px;
     }
     .status {
       display: flex;
@@ -41,20 +41,25 @@
       margin-bottom: 20px;
       box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
     }
-    .temperature-icon {
-      font-size: 32px;
-      margin-bottom: 10px;
-    }
     .chart-container {
-      width: 100%;
+      width: 90%;
       max-width: 800px;
       margin: 20px auto;
       background-color: #2a2a3d;
-      padding: 20px;
+      padding: 10px;
       border-radius: 10px;
     }
     canvas {
       background-color: #1e1e2f;
+      height: 400px; /* Stretch the height of the chart */
+    }
+    @media (max-width: 768px) {
+      .header {
+        font-size: 14px;
+      }
+      .card {
+        font-size: 14px;
+      }
     }
   </style>
 </head>
@@ -73,9 +78,6 @@
   <div class="container">
     <div class="card">
       <h1>Weather Logger</h1>
-      <div class="temperature-icon" id="temperatureIcon">
-        <i class="fa-solid fa-spinner fa-spin"></i>
-      </div>
       <p><strong>Temperature:</strong> <span id="temperature">Fetching...</span> &#8451;</p>
       <p><strong>Humidity:</strong> <span id="humidity">Fetching...</span> %</p>
       <p><strong>Battery Voltage:</strong> <span id="batteryVoltage">Fetching...</span> V</p>
@@ -92,20 +94,28 @@
     const channelID = "2802750"; // Replace with your ThingSpeak Channel ID
     const readAPIKey = "3X1RW3MH5GLS1F9S"; // Replace with your ThingSpeak Read API Key
 
-    // Fetch real-time data
     async function fetchRealTimeData() {
       try {
         const response = await fetch(`https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`);
         const data = await response.json();
         const feed = data.feeds[0];
 
-        updateRealTimeUI(feed);
+        const temperature = parseFloat(feed.field1).toFixed(2);
+        const humidity = parseFloat(feed.field2).toFixed(2);
+        const batteryVoltage = parseFloat(feed.field3).toFixed(2);
+        const batteryPercentage = parseFloat(feed.field4).toFixed(2);
+
+        document.getElementById("temperature").textContent = temperature;
+        document.getElementById("humidity").textContent = humidity;
+        document.getElementById("batteryVoltage").textContent = batteryVoltage;
+        document.getElementById("batteryPercentage").textContent = batteryPercentage;
+
+        document.getElementById("wifiSignal").textContent = `${Math.floor(Math.random() * 100)}%`;
       } catch (error) {
         console.error("Error fetching real-time data:", error);
       }
     }
 
-    // Fetch historical data
     async function fetchHistoricalData() {
       try {
         const response = await fetch(`https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=288`);
@@ -127,7 +137,9 @@
           timestamps,
           temperatures,
           'rgba(255, 99, 132, 0.5)',
-          'rgba(255, 99, 132, 1)'
+          'rgba(255, 99, 132, 1)',
+          tempMin - 5,
+          tempMax + 5
         );
 
         createChart(
@@ -136,42 +148,16 @@
           timestamps,
           humidities,
           'rgba(54, 162, 235, 0.5)',
-          'rgba(54, 162, 235, 1)'
+          'rgba(54, 162, 235, 1)',
+          humidityMin - 5,
+          humidityMax + 5
         );
       } catch (error) {
         console.error("Error fetching historical data:", error);
       }
     }
 
-    // Update real-time UI
-    function updateRealTimeUI(feed) {
-      const temperature = parseFloat(feed.field1).toFixed(2);
-      const humidity = parseFloat(feed.field2).toFixed(2);
-      const batteryVoltage = parseFloat(feed.field3).toFixed(2);
-      const batteryPercentage = parseFloat(feed.field4).toFixed(2);
-
-      // Update UI elements
-      document.getElementById("temperature").textContent = temperature;
-      document.getElementById("humidity").textContent = humidity;
-      document.getElementById("batteryVoltage").textContent = batteryVoltage;
-      document.getElementById("batteryPercentage").textContent = batteryPercentage;
-
-      // Update temperature icon based on temperature
-      const temperatureIcon = document.getElementById("temperatureIcon");
-      if (temperature <= 10) {
-        temperatureIcon.innerHTML = "<i class='fa-solid fa-face-dizzy'></i>"; // Freezing face
-      } else if (temperature > 10 && temperature <= 30) {
-        temperatureIcon.innerHTML = "<i class='fa-solid fa-face-smile'></i>"; // Smiling face
-      } else {
-        temperatureIcon.innerHTML = "<i class='fa-solid fa-face-angry'></i>"; // Hot face
-      }
-
-      // Mock Wi-Fi signal for demonstration
-      document.getElementById("wifiSignal").textContent = `${Math.floor(Math.random() * 100)}%`; // Replace with actual data if available
-    }
-
-    // Create a chart
-    function createChart(canvasId, label, labels, data, bgColor, borderColor) {
+    function createChart(canvasId, label, labels, data, bgColor, borderColor, yMin, yMax) {
       new Chart(document.getElementById(canvasId), {
         type: 'line',
         data: {
@@ -181,33 +167,42 @@
             data: data,
             backgroundColor: bgColor,
             borderColor: borderColor,
-            borderWidth: 1
+            borderWidth: 1,
+            pointRadius: 2,
           }]
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             title: {
               display: true,
               text: label,
               font: {
-                size: 18
+                size: 16
               },
               color: '#ffffff'
             }
           },
           scales: {
-            x: { beginAtZero: false },
-            y: { beginAtZero: true }
+            x: {
+              ticks: {
+                maxTicksLimit: 8,
+              }
+            },
+            y: {
+              min: yMin,
+              max: yMax,
+              ticks: {
+                padding: 10 // Add padding between Y-axis labels and chart
+              }
+            }
           }
         }
       });
     }
 
-    // Fetch data every 5 seconds
     setInterval(fetchRealTimeData, 5000);
-
-    // Initial fetches
     fetchRealTimeData();
     fetchHistoricalData();
   </script>
