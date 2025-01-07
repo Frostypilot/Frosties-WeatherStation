@@ -51,7 +51,7 @@
     }
     canvas {
       background-color: #1e1e2f;
-      height: 400px; /* Stretch the height of the chart */
+      height: 400px;
     }
     @media (max-width: 768px) {
       .header {
@@ -78,8 +78,9 @@
   <div class="container">
     <div class="card">
       <h1>Weather Logger</h1>
-      <p><strong>Temperature:</strong> <span id="temperature">Fetching...</span> &#8451;</p>
-      <p><strong>Humidity:</strong> <span id="humidity">Fetching...</span> %</p>
+      <p><strong>Last Recording:</strong> <span id="lastRecording">Fetching...</span></p>
+      <p><strong>Temperature:</strong> <span id="temperature">Fetching...</span> &#8451; (<span id="tempComfort">Fetching...</span>)</p>
+      <p><strong>Humidity:</strong> <span id="humidity">Fetching...</span> % (<span id="humidityComfort">Fetching...</span>)</p>
       <p><strong>Battery Voltage:</strong> <span id="batteryVoltage">Fetching...</span> V</p>
     </div>
     <div class="chart-container">
@@ -104,11 +105,23 @@
         const humidity = parseFloat(feed.field2).toFixed(2);
         const batteryVoltage = parseFloat(feed.field3).toFixed(2);
         const batteryPercentage = parseFloat(feed.field4).toFixed(2);
+        const lastRecording = new Date(feed.created_at).toLocaleString();
 
         document.getElementById("temperature").textContent = temperature;
         document.getElementById("humidity").textContent = humidity;
         document.getElementById("batteryVoltage").textContent = batteryVoltage;
         document.getElementById("batteryPercentage").textContent = batteryPercentage;
+        document.getElementById("lastRecording").textContent = lastRecording;
+
+        let tempComfort = "Comfortable";
+        if (temperature < 10) tempComfort = "Cold";
+        else if (temperature > 30) tempComfort = "Hot";
+        document.getElementById("tempComfort").textContent = tempComfort;
+
+        let humidityComfort = "Comfortable";
+        if (humidity < 30) humidityComfort = "Dry";
+        else if (humidity > 70) humidityComfort = "Humid";
+        document.getElementById("humidityComfort").textContent = humidityComfort;
 
         document.getElementById("wifiSignal").textContent = `${Math.floor(Math.random() * 100)}%`;
       } catch (error) {
@@ -122,9 +135,13 @@
         const data = await response.json();
         const feeds = data.feeds;
 
-        const timestamps = feeds.map(feed => new Date(feed.created_at).toLocaleTimeString());
-        const temperatures = feeds.map(feed => parseFloat(feed.field1));
-        const humidities = feeds.map(feed => parseFloat(feed.field2));
+        const hourlyFeeds = feeds.filter((feed, index) => index % 12 === 0);
+        const timestamps = hourlyFeeds.map(feed => {
+          const date = new Date(feed.created_at);
+          return `${date.getHours()}:00`; // Round to the nearest hour
+        });
+        const temperatures = hourlyFeeds.map(feed => parseFloat(feed.field1));
+        const humidities = hourlyFeeds.map(feed => parseFloat(feed.field2));
 
         const tempMin = Math.min(...temperatures);
         const tempMax = Math.max(...temperatures);
@@ -187,14 +204,14 @@
           scales: {
             x: {
               ticks: {
-                maxTicksLimit: 8,
+                maxTicksLimit: 10, // Ensure only key times show
               }
             },
             y: {
               min: yMin,
               max: yMax,
               ticks: {
-                padding: 10 // Add padding between Y-axis labels and chart
+                padding: 10
               }
             }
           }
