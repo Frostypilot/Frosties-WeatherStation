@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Weather Logger</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> <!-- Font Awesome -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -40,6 +41,21 @@
       max-width: 400px;
       margin-bottom: 20px;
       box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+    .card p {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+    }
+    .last-recording {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      font-size: 12px;
+      font-style: italic;
+      color: #a9a9a9;
     }
     .chart-container {
       width: 90%;
@@ -52,6 +68,11 @@
     canvas {
       background-color: #1e1e2f;
       height: 400px;
+    }
+    a {
+      color: #4caf50;
+      text-decoration: none;
+      font-size: 18px;
     }
     @media (max-width: 768px) {
       .header {
@@ -78,11 +99,21 @@
   <div class="container">
     <div class="card">
       <h1>Weather Logger</h1>
-      <p><strong>Last Recording:</strong> <span id="lastRecording">Fetching...</span></p>
-      <p><strong>Temperature:</strong> <span id="temperature">Fetching...</span> &#8451; (<span id="tempComfort">Fetching...</span>)</p>
-      <p><strong>Humidity:</strong> <span id="humidity">Fetching...</span> % (<span id="humidityComfort">Fetching...</span>)</p>
-      <p><strong>Battery Voltage:</strong> <span id="batteryVoltage">Fetching...</span> V</p>
+      <p><i class="fas fa-thermometer-half"></i> <strong>Temperature:</strong> <span id="temperature">Fetching...</span> &#8451;</p>
+      <p><i class="fas fa-tint"></i> <strong>Humidity:</strong> <span id="humidity">Fetching...</span> %</p>
+      <p><i class="fas fa-water"></i> <strong>Dew Point:</strong> <span id="dewPoint">Calculating...</span> &#8451;</p>
+      <p><i class="fas fa-cloud"></i> <strong>Cloud Base Height:</strong> <span id="cloudBaseFeet">Calculating...</span> ft</p>
+      <p><i class="fas fa-battery-three-quarters"></i> <strong>Battery Voltage:</strong> <span id="batteryVoltage">Fetching...</span> V</p>
+      <div class="last-recording">
+        <i class="fas fa-clock"></i> <span id="lastRecording">Fetching...</span>
+      </div>
     </div>
+
+    <!-- Link to Historical Data -->
+    <div style="margin: 20px;">
+      <a href="historical.html">Analyze Historical Data</a>
+    </div>
+
     <div class="chart-container">
       <canvas id="temperatureChart"></canvas>
     </div>
@@ -94,6 +125,29 @@
   <script>
     const channelID = "2802750"; // Replace with your ThingSpeak Channel ID
     const readAPIKey = "3X1RW3MH5GLS1F9S"; // Replace with your ThingSpeak Read API Key
+
+    let temperatureChart;
+    let humidityChart;
+
+    // Function to calculate Dew Point
+    function calculateDewPoint(temp, humidity) {
+      return (temp - ((100 - humidity) / 5)).toFixed(2);
+    }
+
+    // Function to calculate Cloud Base Height
+    function calculateCloudBase(temp, dewPoint) {
+      const spread = temp - dewPoint;
+      const cloudBaseMeters = (spread / 2.5) * 1000;
+      const cloudBaseFeet = cloudBaseMeters * 3.28084;
+      return {
+        feet: formatNumber(cloudBaseFeet.toFixed(0)), // Format with commas
+      };
+    }
+
+    // Function to format numbers with commas
+    function formatNumber(number) {
+      return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
 
     async function fetchRealTimeData() {
       try {
@@ -107,21 +161,16 @@
         const batteryPercentage = parseFloat(feed.field4).toFixed(2);
         const lastRecording = new Date(feed.created_at).toLocaleString();
 
+        const dewPoint = calculateDewPoint(temperature, humidity);
+        const cloudBase = calculateCloudBase(temperature, dewPoint);
+
         document.getElementById("temperature").textContent = temperature;
         document.getElementById("humidity").textContent = humidity;
+        document.getElementById("dewPoint").textContent = dewPoint;
+        document.getElementById("cloudBaseFeet").textContent = `${cloudBase.feet}`;
         document.getElementById("batteryVoltage").textContent = batteryVoltage;
         document.getElementById("batteryPercentage").textContent = batteryPercentage;
         document.getElementById("lastRecording").textContent = lastRecording;
-
-        let tempComfort = "Comfortable";
-        if (temperature < 10) tempComfort = "Cold";
-        else if (temperature > 30) tempComfort = "Hot";
-        document.getElementById("tempComfort").textContent = tempComfort;
-
-        let humidityComfort = "Comfortable";
-        if (humidity < 30) humidityComfort = "Dry";
-        else if (humidity > 70) humidityComfort = "Humid";
-        document.getElementById("humidityComfort").textContent = humidityComfort;
 
         document.getElementById("wifiSignal").textContent = `${Math.floor(Math.random() * 100)}%`;
       } catch (error) {
@@ -138,7 +187,7 @@
         const hourlyFeeds = feeds.filter((feed, index) => index % 12 === 0);
         const timestamps = hourlyFeeds.map(feed => {
           const date = new Date(feed.created_at);
-          return `${date.getHours()}:00`; // Round to the nearest hour
+          return `${date.getHours()}:00`;
         });
         const temperatures = hourlyFeeds.map(feed => parseFloat(feed.field1));
         const humidities = hourlyFeeds.map(feed => parseFloat(feed.field2));
@@ -148,45 +197,29 @@
         const humidityMin = Math.min(...humidities);
         const humidityMax = Math.max(...humidities);
 
-        createChart(
-          'temperatureChart',
-          `Temperature (°C) - Min: ${tempMin.toFixed(1)}, Max: ${tempMax.toFixed(1)}`,
-          timestamps,
-          temperatures,
-          'rgba(255, 99, 132, 0.5)',
-          'rgba(255, 99, 132, 1)',
-          tempMin - 5,
-          tempMax + 5
-        );
-
-        createChart(
-          'humidityChart',
-          `Humidity (%) - Min: ${humidityMin.toFixed(1)}, Max: ${humidityMax.toFixed(1)}`,
-          timestamps,
-          humidities,
-          'rgba(54, 162, 235, 0.5)',
-          'rgba(54, 162, 235, 1)',
-          humidityMin - 5,
-          humidityMax + 5
-        );
+        updateChart("temperatureChart", "Temperature (°C)", timestamps, temperatures, tempMin - 5, tempMax + 5, tempMin, tempMax);
+        updateChart("humidityChart", "Humidity (%)", timestamps, humidities, humidityMin - 5, humidityMax + 5, humidityMin, humidityMax);
       } catch (error) {
         console.error("Error fetching historical data:", error);
       }
     }
 
-    function createChart(canvasId, label, labels, data, bgColor, borderColor, yMin, yMax) {
-      new Chart(document.getElementById(canvasId), {
-        type: 'line',
+    function updateChart(canvasId, label, labels, data, yMin, yMax, min, max) {
+      const ctx = document.getElementById(canvasId).getContext("2d");
+      if (canvasId === "temperatureChart" && temperatureChart) temperatureChart.destroy();
+      if (canvasId === "humidityChart" && humidityChart) humidityChart.destroy();
+
+      const chart = new Chart(ctx, {
+        type: "line",
         data: {
-          labels: labels,
+          labels,
           datasets: [{
-            label: label,
-            data: data,
-            backgroundColor: bgColor,
-            borderColor: borderColor,
-            borderWidth: 1,
+            label,
+            data,
+            borderColor: canvasId === "temperatureChart" ? "rgba(255, 99, 132, 1)" : "rgba(54, 162, 235, 1)",
+            borderWidth: 2,
             pointRadius: 2,
-          }]
+          }],
         },
         options: {
           responsive: true,
@@ -194,29 +227,19 @@
           plugins: {
             title: {
               display: true,
-              text: label,
-              font: {
-                size: 16
-              },
-              color: '#ffffff'
-            }
+              text: `${label} (Min: ${min.toFixed(1)}, Max: ${max.toFixed(1)})`,
+              color: "#ffffff",
+            },
           },
           scales: {
-            x: {
-              ticks: {
-                maxTicksLimit: 10, // Ensure only key times show
-              }
-            },
-            y: {
-              min: yMin,
-              max: yMax,
-              ticks: {
-                padding: 10
-              }
-            }
-          }
-        }
+            x: { ticks: { color: "#ffffff" } },
+            y: { min: yMin, max: yMax, ticks: { color: "#ffffff" } },
+          },
+        },
       });
+
+      if (canvasId === "temperatureChart") temperatureChart = chart;
+      if (canvasId === "humidityChart") humidityChart = chart;
     }
 
     setInterval(fetchRealTimeData, 5000);
